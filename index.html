@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Baby Shower — Fiesta Interactiva</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="confetti"></canvas>
+  <header>
+    <div class="logo">B</div>
+    <div>
+      <h1>Baby Shower Interactivo</h1>
+      <div class="subtitle">¡Vota, chatea y celebra en tu fiesta!</div>
+    </div>
+  </header>
+  <main>
+    <section class="card panel">
+      <h2>Votación: Nombre</h2>
+      <div id="votingList"></div>
+      <div class="actions">
+        <button id="revealBtn" class="reveal">Revelar votos</button>
+        <button id="beHostBtn" class="host-btn">Soy anfitrión</button>
+      </div>
+      <div class="presence">Participantes: <span id="presenceCount">0</span></div>
+    </section>
+    <section class="card panel">
+      <h2>Chat</h2>
+      <div class="messages" id="messages"></div>
+      <div class="chat-input">
+        <input id="chatInput" type="text" placeholder="Escribe un mensaje...">
+        <button id="sendBtn">Enviar</button>
+      </div>
+      <div class="reactions">
+        <button class="reaction-btn" data-emoji="❤️">❤️ <small id="count-❤️">0</small></button>
+        <button class="reaction-btn" data-emoji="🎉">🎉 <small id="count-🎉">0</small></button>
+        <button class="reaction-btn" data-emoji="😂">😂 <small id="count-😂">0</small></button>
+      </div>
+    </section>
+    <section class="card panel">
+      <h2>Resumen</h2>
+      <div class="pill">Votos totales: <strong id="totalVotes">0</strong></div>
+      <div class="pill">Mensajes: <strong id="totalMsgs">0</strong></div>
+      <div class="pill">Reacciones: <strong id="totalReacts">0</strong></div>
+    </section>
+  </main>
+  <footer class="app-foot">
+    <div class="footer-note">LocalStorage + BroadcastChannel. Sin servidor 🚀</div>
+    <button id="resetBtn" class="reset-btn">Reiniciar</button>
+  </footer>
+  <script src="script.js"></script>
+</body>
+</html>
