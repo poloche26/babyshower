@@ -1,54 +1,94 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Baby Shower — Fiesta Interactiva</title>
+  <meta charset="UTF-8">
+  <title>Revelación del Bebé</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <canvas id="confetti"></canvas>
-  <header>
-    <div class="logo">B</div>
-    <div>
-      <h1>Baby Shower Interactivo</h1>
-      <div class="subtitle">¡Vota, chatea y celebra en tu fiesta!</div>
+  <!-- BIENVENIDA -->
+  <div id="welcome-overlay" class="overlay">
+    <div class="welcome-content">
+      <h1>👶 ¡Bienvenidos familia! 👶</h1>
+      <p>
+        Hoy celebramos juntos la llegada de un nuevo miembro a nuestra familia.<br>
+        Un regalo de amor que llenará nuestras vidas de sonrisas y felicidad 💖
+      </p>
+      <input id="name-input" type="text" placeholder="Escribe tu nombre..." />
+      <button id="start-presentation-btn">Iniciar presentación</button>
     </div>
-  </header>
-  <main>
-    <section class="card panel">
-      <h2>Votación: Nombre</h2>
-      <div id="votingList"></div>
-      <div class="actions">
-        <button id="revealBtn" class="reveal">Revelar votos</button>
-        <button id="beHostBtn" class="host-btn">Soy anfitrión</button>
+  </div>
+
+  <!-- PRESENTACIÓN -->
+  <div id="presentation-overlay" class="overlay hidden">
+    <div class="slideshow">
+      <div class="slide active">
+        <img src="img/embarazo1.jpg" alt="Momento especial" />
+        <p>"Cada latido es un recordatorio de cuánto amor nos espera 💕"</p>
       </div>
-      <div class="presence">Participantes: <span id="presenceCount">0</span></div>
-    </section>
-    <section class="card panel">
+      <div class="slide">
+        <img src="img/embarazo2.jpg" alt="Ecografía" />
+        <p>"La vida nos sorprende con milagros que caben en un corazón tan pequeño ✨"</p>
+      </div>
+      <div class="slide">
+        <img src="img/embarazo3.jpg" alt="Familia" />
+        <p>"La familia crece, y con ella el amor infinito 💖"</p>
+      </div>
+      <div class="slide">
+        <img src="img/embarazo4.jpg" alt="Barriguita" />
+        <p>"Pronto en nuestros brazos, hoy ya en nuestro corazón 💞"</p>
+      </div>
+    </div>
+    <button id="next-slide-btn">➡️ Siguiente</button>
+  </div>
+
+  <!-- AUDIO PRESENTACIÓN -->
+  <audio id="presentation-music" src="music/tiernita.mp3" loop></audio>
+
+  <!-- APP PRINCIPAL -->
+  <main id="app" class="hidden">
+    <div class="card">
+      <h2>Vota por el sexo del bebé</h2>
+      <div id="votes"></div>
+    </div>
+
+    <div class="card">
       <h2>Chat</h2>
-      <div class="messages" id="messages"></div>
-      <div class="chat-input">
-        <input id="chatInput" type="text" placeholder="Escribe un mensaje...">
-        <button id="sendBtn">Enviar</button>
-      </div>
-      <div class="reactions">
-        <button class="reaction-btn" data-emoji="❤️">❤️ <small id="count-❤️">0</small></button>
-        <button class="reaction-btn" data-emoji="🎉">🎉 <small id="count-🎉">0</small></button>
-        <button class="reaction-btn" data-emoji="😂">😂 <small id="count-😂">0</small></button>
-      </div>
-    </section>
-    <section class="card panel">
-      <h2>Resumen</h2>
-      <div class="pill">Votos totales: <strong id="totalVotes">0</strong></div>
-      <div class="pill">Mensajes: <strong id="totalMsgs">0</strong></div>
-      <div class="pill">Reacciones: <strong id="totalReacts">0</strong></div>
-    </section>
+      <div id="messages"></div>
+      <input id="chat-input" placeholder="Escribe un mensaje..." />
+      <button id="send-btn">Enviar</button>
+    </div>
+
+    <div class="card">
+      <h2>Reacciones</h2>
+      <div id="reactions"></div>
+    </div>
+
+    <div class="card panel">
+      <h2>Historial de Votaciones</h2>
+      <div id="vote-history"></div>
+    </div>
+
+    <div class="card">
+      <h2>Anfitrión</h2>
+      <button id="host-btn">Soy anfitrión</button>
+      <button id="reveal-btn" class="hidden">Revelar</button>
+      <button id="reset-btn">Reiniciar</button>
+    </div>
   </main>
-  <footer class="app-foot">
-    <div class="footer-note">LocalStorage + BroadcastChannel. Sin servidor 🚀</div>
-    <button id="resetBtn" class="reset-btn">Reiniciar</button>
-  </footer>
+
+  <!-- Conteo regresivo final -->
+  <div id="final-countdown" class="overlay hidden">
+    <div id="countdown-number">10</div>
+  </div>
+
+  <!-- Revelación final -->
+  <div id="reveal-overlay" class="overlay hidden">
+    <h1 id="baby-reveal-text">¡Es un...!</h1>
+    <canvas id="balloons"></canvas>
+    <audio id="celebration-sound" src="music/celebration.mp3"></audio>
+  </div>
+
   <script src="script.js"></script>
 </body>
 </html>
