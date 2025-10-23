@@ -206,17 +206,40 @@ window.addEventListener("load", () => {
       location.reload();
     }
   });
+
+  // =========================
+  // 🎀 NUEVO BOTÓN: Revelar directamente que es una Niña
+  // =========================
+  const extraRevealBtn = document.createElement("button");
+  extraRevealBtn.textContent = "💖 Descubre el Milagro 🎀";
+  extraRevealBtn.style.marginTop = "20px";
+  extraRevealBtn.style.padding = "10px 20px";
+  extraRevealBtn.style.fontSize = "1rem";
+  extraRevealBtn.style.backgroundColor = "#ff99c8";
+  extraRevealBtn.style.color = "white";
+  extraRevealBtn.style.border = "none";
+  extraRevealBtn.style.borderRadius = "8px";
+  extraRevealBtn.style.cursor = "pointer";
+  extraRevealBtn.onclick = () => {
+    revealOverlay.classList.remove("hidden");
+    audioSoft.pause();
+    audioCelebration.play();
+    revealTitle.textContent = "¡Es una Niña! 🎀";
+    revealSub.textContent = "🎀 Que la ternura de este nuevo comienzo nos acompañe siempre 💖";
+    startCelebration("Niña");
+  };
+
+  document.body.appendChild(extraRevealBtn);
 });
+
 // 🎉 EFECTO DE CELEBRACIÓN AL REVELAR SEXO DEL BEBÉ
 function startCelebration(chosenSex) {
-  // 🌈 Fondo animado según el sexo
   document.body.style.transition = "background 1s ease";
   document.body.style.background =
     chosenSex === "Niña"
       ? "linear-gradient(180deg, #ffd0ea, #ff99c8, #fff)"
       : "linear-gradient(180deg, #b3e5fc, #64b5f6, #fff)";
 
-  // 🎊 CONFETTI (colores adaptados)
   for (let i = 0; i < 200; i++) {
     const confetti = document.createElement("div");
     confetti.classList.add("confetti");
@@ -228,14 +251,11 @@ function startCelebration(chosenSex) {
       chosenSex === "Niña"
         ? ["#ff69b4", "#ffc0cb", "#fff"][Math.floor(Math.random() * 3)]
         : ["#1e90ff", "#87cefa", "#fff"][Math.floor(Math.random() * 3)];
-    confetti.style.animation = `confettiFall ${
-      3 + Math.random() * 3
-    }s linear forwards`;
+    confetti.style.animation = `confettiFall ${3 + Math.random() * 3}s linear forwards`;
     document.body.appendChild(confetti);
     setTimeout(() => confetti.remove(), 6000);
   }
 
-  // 🎈 GLOBOS PERSONALIZADOS (rosas o celestes)
   for (let i = 0; i < 30; i++) {
     const balloon = document.createElement("div");
     balloon.classList.add("balloon");
@@ -245,14 +265,11 @@ function startCelebration(chosenSex) {
       chosenSex === "Niña"
         ? ["🎀", "🎈", "💖"][Math.floor(Math.random() * 3)]
         : ["💙", "🎈", "🍼"][Math.floor(Math.random() * 3)];
-    balloon.style.animation = `floatBalloon ${
-      5 + Math.random() * 5
-    }s linear forwards`;
+    balloon.style.animation = `floatBalloon ${5 + Math.random() * 5}s linear forwards`;
     document.body.appendChild(balloon);
     setTimeout(() => balloon.remove(), 7000);
   }
 
-  // 💥 FUEGOS ARTIFICIALES
   for (let i = 0; i < 10; i++) {
     const firework = document.createElement("div");
     firework.classList.add("firework");
@@ -266,5 +283,3 @@ function startCelebration(chosenSex) {
     setTimeout(() => firework.remove(), 1500);
   }
 }
-
-
