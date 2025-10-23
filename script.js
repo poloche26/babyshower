@@ -1,33 +1,34 @@
-/* script.js
-   ===============================
-   Funcionalidades principales:
-   - Sincronización entre pestañas (BroadcastChannel + localStorage)
-   - Flujo de presentación por sesiones (presentación -> votación -> interacción)
-   - Gestión de nombres y votos únicos por cliente
-   - Chat en tiempo real y reacciones flotantes
-   - Controles para el anfitrión (con contraseña 'confetti')
-   - Fijación del sexo, cuenta regresiva y revelación final con confeti y globos
-   - Integración de música en tres etapas: bienvenida, fondo suave e inicio de celebración
-   ===============================
-*/
+/* ==========================================================
+  🍼 Baby Shower Reveal Script - Versión completa
+  ----------------------------------------------------------
+  - Sincronización entre pestañas (BroadcastChannel + localStorage)
+  - Sesiones: presentación → votaciones + interacción
+  - Guarda nombre de usuario y evita votos duplicados
+  - Chat y reacciones visibles en tiempo real
+  - El anfitrión puede fijar el sexo, iniciar el conteo y revelar
+  - Animaciones de confetti y globos al final
+=========================================================== */
 
-// --- Sincronización entre pestañas ---
-const channel = new BroadcastChannel("babyshower_v1"); // Canal compartido entre pestañas
-const clientId = localStorage.getItem("babyshower-clientId") || Math.random().toString(36).slice(2); // ID único por cliente
+// --- Canal compartido entre pestañas para sincronizar datos ---
+const canal = new BroadcastChannel("babyshower_v1");
+
+// ID único del cliente (permite distinguir a cada participante)
+const clientId = localStorage.getItem("babyshower-clientId") || Math.random().toString(36).slice(2);
 localStorage.setItem("babyshower-clientId", clientId);
 
-let userName = localStorage.getItem("babyshower-name") || ""; // Nombre del usuario guardado
+// Nombre del usuario
+let userName = localStorage.getItem("babyshower-name") || "";
 
-// --- Estado global compartido ---
+// Estado global compartido (se guarda en localStorage)
 let state = JSON.parse(localStorage.getItem("babyshower-state") || "{}") || {
-  voters: {},         // Votos: clientId -> {name, choice}
-  messages: [],       // Chat: lista de mensajes
-  reactions: [],      // Reacciones flotantes
-  chosenSex: null,    // "Niño" o "Niña" (fijado por el anfitrión)
-  revealed: false     // Estado de revelación final
+  voters: {},         // clientId -> {name, choice}
+  messages: [],       // {id, name, text}
+  reactions: [],      // {id, name, emoji, ts}
+  chosenSex: null,    // "Niño" | "Niña"
+  revealed: false     // si ya se hizo la revelación
 };
 
-// --- Selección de elementos del DOM ---
+// --- Elementos del DOM ---
 const el = (id)=>document.getElementById(id);
 const welcomeOverlay = el("welcome-overlay");
 const presOverlay = el("presentation-overlay");
@@ -36,12 +37,9 @@ const nameInput = el("name-input");
 const slides = document.querySelectorAll(".slide");
 let currentSlide = 0;
 const nextSlideBtn = el("next-slide-btn");
-const prevSlideBtn = el("prev-slide-btn");
 const app = el("app");
 const votesDiv = el("votes");
-const presenceCount = el("presence-count") || null;
-const countBoyEl = el("count-boy");
-const countGirlEl = el("count-girl");
+const presenceCount = el("presence-count");
 const voteHistoryEl = el("vote-history");
 const messagesEl = el("messages");
 const chatInput = el("chat-input");
@@ -63,291 +61,292 @@ const revealSub = el("reveal-sub");
 const confettiCanvas = el("confetti-canvas");
 const balloonsLayer = el("balloons-layer");
 
-// --- Audio ---
-const audioWelcome = el("audio-welcome");       // Música al inicio
-const audioSoft = el("audio-soft");             // Música de fondo suave
-const audioCelebration = el("audio-celebration"); // Música de celebración final
+// --- Audios ---
+const audioWelcome = el("audio-welcome");
+const audioSoft = el("audio-soft");
+const audioCelebration = el("audio-celebration");
 
-// --- Guardar y compartir estado entre pestañas ---
-function persistAndBroadcast(){
+/* ==========================================================
+   🔄 FUNCIONES DE SINCRONIZACIÓN
+=========================================================== */
+function guardarYTransmitir() {
   localStorage.setItem("babyshower-state", JSON.stringify(state));
-  channel.postMessage({type:'state', state}); // Envía el estado a otras pestañas
-  renderAll(); // Refresca interfaz
+  canal.postMessage({ type: 'state', state });
+  renderizarTodo();
 }
 
-// --- Comunicación entre pestañas ---
-channel.onmessage = (ev)=>{
+// Escuchar actualizaciones desde otras pestañas
+canal.onmessage = (ev) => {
   const msg = ev.data;
-  if(!msg) return;
-  if(msg.type === 'request_state'){
-    // Si otra pestaña pide el estado, se le envía
-    channel.postMessage({type:'state', state});
-  } else if(msg.type === 'state'){
-    // Si recibimos un nuevo estado, lo actualizamos localmente
+  if (!msg) return;
+  if (msg.type === 'request_state') {
+    canal.postMessage({ type: 'state', state });
+  } else if (msg.type === 'state') {
     state = msg.state || state;
     localStorage.setItem("babyshower-state", JSON.stringify(state));
-    renderAll();
+    renderizarTodo();
   }
 };
 
-// --- Al abrir nueva pestaña, solicitar el estado actual ---
-function requestStateFromPeers(){
-  channel.postMessage({type:'request_state', from:clientId});
+// Pedir estado a las demás pestañas al abrir
+function solicitarEstado() {
+  canal.postMessage({ type: 'request_state', from: clientId });
   const s = JSON.parse(localStorage.getItem("babyshower-state") || "{}");
-  if(s && Object.keys(s).length) { state = s; renderAll(); }
+  if (s && Object.keys(s).length) {
+    state = s;
+    renderizarTodo();
+  }
 }
 
-// --- Flujo de presentación inicial ---
-function showSlide(i){
-  slides.forEach((el, idx)=> el.classList.toggle('active', idx===i) );
+/* ==========================================================
+   🎬 SECCIÓN DE PRESENTACIÓN
+=========================================================== */
+function mostrarSlide(i) {
+  slides.forEach((el, idx) => el.classList.toggle('active', idx === i));
   currentSlide = i;
 }
 
-// Botón siguiente diapositiva
-nextSlideBtn?.addEventListener('click', ()=>{
+nextSlideBtn?.addEventListener('click', () => {
   currentSlide++;
-  if(currentSlide >= slides.length) {
+  if (currentSlide >= slides.length) {
     presOverlay.classList.add('hidden');
-    app.classList.remove('hidden'); // Muestra la parte principal (votación/chat)
-    try{ audioSoft.play(); }catch(e){} // Comienza música suave
-  } else showSlide(currentSlide);
+    app.classList.remove('hidden');
+    try { audioSoft.play(); } catch(e){}
+  } else mostrarSlide(currentSlide);
 });
 
-// Botón anterior diapositiva
-prevSlideBtn?.addEventListener('click', ()=>{
-  currentSlide = Math.max(0, currentSlide-1);
-  showSlide(currentSlide);
-});
-
-// Botón para iniciar presentación (entrada del nombre)
-startPresBtn.addEventListener('click', ()=>{
+startPresBtn.addEventListener('click', () => {
   const name = nameInput.value.trim();
-  if(!name && !userName){
+  if (!name && !userName) {
     alert("Por favor escribe tu nombre antes de continuar");
     return;
   }
-  if(name){ userName = name; localStorage.setItem("babyshower-name", userName); }
+  if (name) {
+    userName = name;
+    localStorage.setItem("babyshower-name", userName);
+  }
   welcomeOverlay.classList.add('hidden');
   presOverlay.classList.remove('hidden');
-  showSlide(0);
-  try{ audioWelcome.play(); }catch(e){}
+  mostrarSlide(0);
+  try { audioWelcome.play(); } catch(e){}
 });
 
-// --- Construcción de botones de votación ---
-function buildVoteButtons(){
+/* ==========================================================
+   🗳️ SECCIÓN DE VOTACIONES
+=========================================================== */
+function crearBotonesVoto() {
   votesDiv.innerHTML = '';
-  const choices = ['Niño','Niña','¡Sorpréndeme!'];
-  choices.forEach(choice=>{
+  const opciones = ['Niño', 'Niña', '¡Sorpréndeme!'];
+  opciones.forEach(choice => {
     const btn = document.createElement('button');
     btn.className = 'vote-btn';
     btn.dataset.choice = choice;
-    btn.textContent = (choice==='Niño'?'💙 Niño': choice==='Niña'?'💖 Niña':'🎁 ¡Sorpréndeme!');
-    btn.addEventListener('click', ()=>{
-      // Guardar voto por cliente
-      state.voters[clientId] = { name: userName || ('Invitado-'+clientId.slice(0,4)), choice, ts:Date.now() };
-      persistAndBroadcast();
+    btn.textContent = (choice === 'Niño' ? '💙 Niño' :
+                      choice === 'Niña' ? '💖 Niña' : '🎁 ¡Sorpréndeme!');
+    btn.addEventListener('click', () => {
+      state.voters[clientId] = { name: userName || ('Invitado-' + clientId.slice(0,4)), choice, ts: Date.now() };
+      guardarYTransmitir();
     });
     votesDiv.appendChild(btn);
   });
 }
 
-// --- Chat ---
-sendBtn.addEventListener('click', sendMessage);
-chatInput.addEventListener('keypress', (e)=>{ if(e.key==='Enter') sendMessage(); });
+/* ==========================================================
+   💬 CHAT EN VIVO
+=========================================================== */
+sendBtn.addEventListener('click', enviarMensaje);
+chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') enviarMensaje(); });
 
-// Enviar mensaje al chat
-function sendMessage(){
-  const text = chatInput.value.trim();
-  if(!text) return;
-  const name = userName || ('Invitado-'+clientId.slice(0,4));
-  const msg = { id: Math.random().toString(36).slice(2), name, text, ts:Date.now() };
+function enviarMensaje() {
+  const texto = chatInput.value.trim();
+  if (!texto) return;
+  const nombre = userName || ('Invitado-' + clientId.slice(0,4));
+  const msg = { id: Math.random().toString(36).slice(2), name: nombre, text: texto, ts: Date.now() };
   state.messages.push(msg);
   chatInput.value = '';
-  persistAndBroadcast();
-  showReactionToast(`${name} dijo: ${text}`);
+  guardarYTransmitir();
+  mostrarReaccionFlotante("💬");
 }
 
-// --- Reacciones flotantes ---
-reactionButtons.forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+/* ==========================================================
+   🎈 REACCIONES
+=========================================================== */
+reactionButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
     const emoji = btn.textContent.trim();
-    const name = userName || ('Invitado-'+clientId.slice(0,4));
-    const r = { id: Date.now() + Math.random(), name, emoji, ts: Date.now() };
+    const nombre = userName || ('Invitado-' + clientId.slice(0,4));
+    const r = { id: Date.now() + Math.random(), name: nombre, emoji, ts: Date.now() };
     state.reactions.push(r);
-    persistAndBroadcast();
-    animateReaction(r);
+    guardarYTransmitir();
+    mostrarReaccionFlotante(emoji);
   });
 });
 
-// Animación de reacciones que suben flotando
-function animateReaction(r){
+function mostrarReaccionFlotante(emoji) {
   const node = document.createElement('div');
   node.className = 'reaction-float';
-  node.textContent = r.emoji;
+  node.textContent = emoji;
   node.style.left = (10 + Math.random()*80) + '%';
+  node.style.position = 'fixed';
+  node.style.bottom = '0';
+  node.style.fontSize = '2rem';
+  node.style.animation = 'floatUp 3s ease forwards';
   document.body.appendChild(node);
-  setTimeout(()=> node.remove(), 3000);
+  setTimeout(() => node.remove(), 3000);
 }
 
-// Pequeña notificación en consola (puede reemplazarse por toasts visuales)
-function showReactionToast(text){
-  console.log(text);
-}
-
-// --- Renderización general (actualiza interfaz) ---
-function renderMessages(){
+/* ==========================================================
+   🧾 RENDERIZADO GENERAL
+=========================================================== */
+function renderizarMensajes() {
   messagesEl.innerHTML = '';
-  state.messages.slice(-200).forEach(m=>{
+  state.messages.slice(-200).forEach(m => {
     const d = document.createElement('div');
     d.className = 'msg';
-    d.innerHTML = `<strong>${escapeHtml(m.name)}:</strong> ${escapeHtml(m.text)}`;
+    d.innerHTML = `<strong>${escaparHTML(m.name)}:</strong> ${escaparHTML(m.text)}`;
     messagesEl.appendChild(d);
   });
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// Mostrar votos y conteo
-function renderVoteHistory(){
+function renderizarHistorialVotos() {
   voteHistoryEl.innerHTML = '';
-  Object.values(state.voters).forEach(v=>{
+  Object.values(state.voters).forEach(v => {
     const d = document.createElement('div');
     d.className = 'vote-entry';
     d.textContent = `${v.name} → ${v.choice}`;
     voteHistoryEl.appendChild(d);
   });
-
-  const totals = { 'Niño':0, 'Niña':0 };
-  Object.values(state.voters).forEach(v=>{
-    if(v.choice==='Niño') totals['Niño']++;
-    else if(v.choice==='Niña') totals['Niña']++;
+  const totales = { 'Niño': 0, 'Niña': 0 };
+  Object.values(state.voters).forEach(v => {
+    if (v.choice === 'Niño') totales['Niño']++;
+    else if (v.choice === 'Niña') totales['Niña']++;
   });
-
-  const pc = document.getElementById('presence-count');
-  if(pc) pc.textContent = Object.keys(state.voters).length.toString();
-  if(countBoyEl) countBoyEl.textContent = (totals['Niño']||0).toString();
-  if(countGirlEl) countGirlEl.textContent = (totals['Niña']||0).toString();
+  presenceCount.textContent = Object.keys(state.voters).length.toString();
 }
 
-// Mostrar conteo de reacciones
-function renderReactionCounts(){
-  if(!reactionCountsEl) return;
-  const map = {};
-  state.reactions.forEach(r=> map[r.emoji] = (map[r.emoji]||0)+1);
-  reactionCountsEl.textContent = Object.entries(map).map(([k,v])=>`${k} ${v}`).join('  ');
+function renderizarReacciones() {
+  const mapa = {};
+  state.reactions.forEach(r => mapa[r.emoji] = (mapa[r.emoji] || 0) + 1);
+  reactionCountsEl.textContent = Object.entries(mapa).map(([k,v]) => `${k} ${v}`).join('  ');
 }
 
-// Renderiza toda la interfaz
-function renderAll(){
-  buildVoteButtons();
-  renderMessages();
-  renderVoteHistory();
-  renderReactionCounts();
-  if(state.chosenSex){
-    chosenSexEl.textContent = `Sexo fijado: ${state.chosenSex}`;
-  } else {
-    chosenSexEl.textContent = 'Sexo no fijado';
-  }
-  if(state.revealed){
-    launchRevealUI(state.chosenSex);
+function renderizarTodo() {
+  crearBotonesVoto();
+  renderizarMensajes();
+  renderizarHistorialVotos();
+  renderizarReacciones();
+
+  // Mostrar sexo fijado
+  if (state.chosenSex) chosenSexEl.textContent = `Sexo fijado: ${state.chosenSex}`;
+  else chosenSexEl.textContent = 'Sexo no fijado';
+
+  // Si ya se reveló en otra pestaña, mostrar la animación
+  if (state.revealed) {
+    mostrarRevelacionFinal(state.chosenSex);
   }
 }
 
-// Evita inyección HTML en chat
-function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escaparHTML(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
-// --- Controles del anfitrión ---
-hostBtn.addEventListener('click', ()=>{
+/* ==========================================================
+   👑 ANFITRIÓN
+=========================================================== */
+hostBtn.addEventListener('click', () => {
   const pass = prompt("Contraseña de anfitrión:");
-  if(pass === 'confetti'){
+  if (pass === 'confetti') {
     hostControls.classList.remove('hidden');
-    alert('Controles de anfitrión activados');
+    alert('✅ Controles de anfitrión activados.');
   } else {
-    alert('Contraseña incorrecta');
+    alert('❌ Contraseña incorrecta.');
   }
 });
-setBoyBtn.addEventListener('click', ()=>{
+
+setBoyBtn.addEventListener('click', () => {
   state.chosenSex = 'Niño';
-  persistAndBroadcast();
+  guardarYTransmitir();
 });
-setGirlBtn.addEventListener('click', ()=>{
+setGirlBtn.addEventListener('click', () => {
   state.chosenSex = 'Niña';
-  persistAndBroadcast();
+  guardarYTransmitir();
 });
 
-// Iniciar revelación
-revealBtn.addEventListener('click', ()=>{
-  if(!state.chosenSex){
-    alert('Debes fijar el sexo del bebé antes de iniciar la revelación.');
+revealBtn.addEventListener('click', () => {
+  if (!state.chosenSex) {
+    alert('Debes fijar el sexo antes de iniciar la revelación.');
     return;
   }
-  startFinalCountdown(state.chosenSex);
+  iniciarConteoFinal(state.chosenSex);
   state.revealed = true;
-  persistAndBroadcast();
+  guardarYTransmitir();
 });
 
-// Reiniciar todo el evento
-resetBtn.addEventListener('click', ()=>{
-  if(!confirm('¿Reiniciar todo?')) return;
+resetBtn.addEventListener('click', () => {
+  if (!confirm('¿Reiniciar todo el evento?')) return;
   localStorage.removeItem('babyshower-state');
   state = { voters:{}, messages:[], reactions:[], chosenSex:null, revealed:false };
-  persistAndBroadcast();
+  guardarYTransmitir();
 });
 
-// --- Cuenta regresiva final y revelación ---
-function startFinalCountdown(sex){
+/* ==========================================================
+   ⏳ CONTEO Y REVELACIÓN FINAL
+=========================================================== */
+function iniciarConteoFinal(sexo) {
   finalCountdown.classList.remove('hidden');
   let count = 10;
   countdownNumber.textContent = count;
-  try{ audioSoft.pause(); audioWelcome.pause(); }catch(e){}
-  const interval = setInterval(()=>{
+  try { audioSoft.pause(); audioWelcome.pause(); } catch(e){}
+  const intervalo = setInterval(() => {
     count--;
     countdownNumber.textContent = count;
-    if(count <= 0){
-      clearInterval(interval);
+    if (count <= 0) {
+      clearInterval(intervalo);
       finalCountdown.classList.add('hidden');
-      launchRevealUI(sex);
+      mostrarRevelacionFinal(sexo);
     }
-  },1000);
+  }, 1000);
 }
 
-// Mostrar pantalla de revelación
-function launchRevealUI(sex){
+function mostrarRevelacionFinal(sexo) {
   revealOverlay.classList.remove('hidden');
-  revealTitle.textContent = `¡Es un ${sex}!`;
-  revealSub.textContent = (sex === 'Niña') ? '💙 ¡Felicidades!' : '💖 ¡Felicidades!';
-  try{
+  revealTitle.textContent = `¡Es un ${sexo}!`;
+  revealSub.textContent = (sexo === 'Niño') ? '💙 ¡Felicidades!' : '💖 ¡Felicidades!';
+  try {
     audioSoft.pause();
     audioCelebration.currentTime = 0;
     audioCelebration.play();
-  }catch(e){}
-  runConfetti(sex);
-  launchBalloons(sex);
+  } catch(e){}
+  lanzarConfetti(sexo);
+  lanzarGlobos(sexo);
 }
 
-// --- Confeti ---
-function runConfetti(sex){
-  if(!confettiCanvas) return;
+/* ==========================================================
+   🎊 ANIMACIONES DE CELEBRACIÓN
+=========================================================== */
+function lanzarConfetti(sexo) {
+  if (!confettiCanvas) return;
   const canvas = confettiCanvas;
   const ctx = canvas.getContext('2d');
   canvas.width = innerWidth;
   canvas.height = innerHeight;
-  const colors = (sex === 'Niño') ? ['#8FD3FF','#4FA3F7','#1E6ED8'] : ['#FFD0EA','#FF8FB4','#FF5BA3'];
-  const pieces = [];
-  for(let i=0;i<160;i++){
-    pieces.push({
+  const colores = (sexo === 'Niño') ? ['#8FD3FF','#4FA3F7','#1E6ED8'] : ['#FFD0EA','#FF8FB4','#FF5BA3'];
+  const piezas = [];
+  for (let i=0; i<160; i++) {
+    piezas.push({
       x: Math.random()*canvas.width,
       y: Math.random()*-canvas.height,
       vx: (Math.random()-0.5)*4,
       vy: 2+Math.random()*4,
       size: 6+Math.random()*8,
-      color: colors[Math.floor(Math.random()*colors.length)],
+      color: colores[Math.floor(Math.random()*colores.length)],
       rot: Math.random()*360
     });
   }
-  let t=0;
-  function frame(){
+  function frame() {
     ctx.clearRect(0,0,canvas.width,canvas.height);
-    pieces.forEach(p=>{
+    piezas.forEach(p => {
       p.x += p.vx;
       p.y += p.vy;
       p.rot += 6*p.vx;
@@ -357,46 +356,44 @@ function runConfetti(sex){
       ctx.fillStyle = p.color;
       ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size*0.6);
       ctx.restore();
-      if(p.y > canvas.height+50){
+      if (p.y > canvas.height+50) {
         p.x = Math.random()*canvas.width;
         p.y = -10;
       }
     });
-    t++;
-    if(t<600) requestAnimationFrame(frame);
-    else ctx.clearRect(0,0,canvas.width,canvas.height);
+    requestAnimationFrame(frame);
   }
   frame();
 }
 
-// --- Globos ---
-function launchBalloons(sex){
-  const container = balloonsLayer;
-  container.innerHTML = '';
-  const color = sex === 'Niño' ? '#4fa3f7' : '#ff80c0';
-  for(let i=0;i<18;i++){
+function lanzarGlobos(sexo) {
+  const cont = balloonsLayer;
+  cont.innerHTML = '';
+  const color = (sexo === 'Niño') ? '#4fa3f7' : '#ff80c0';
+  for (let i=0; i<20; i++) {
     const b = document.createElement('div');
     b.className = 'balloon';
     b.style.left = Math.random()*86 + '%';
     b.style.background = color;
     b.style.animationDuration = (5 + Math.random()*4) + 's';
-    container.appendChild(b);
-    setTimeout(()=> b.remove(), 8000);
+    cont.appendChild(b);
+    setTimeout(() => b.remove(), 8000);
   }
 }
 
-// --- Sincronización por almacenamiento local ---
-window.addEventListener('storage', ()=>{
+/* ==========================================================
+   🚀 INICIALIZACIÓN
+=========================================================== */
+window.addEventListener('storage', () => {
   const s = JSON.parse(localStorage.getItem("babyshower-state") || "{}");
-  if(s && Object.keys(s).length){ state = s; renderAll(); }
+  if (s && Object.keys(s).length) { state = s; renderizarTodo(); }
 });
 
-// --- Inicio ---
-requestStateFromPeers();
-buildVoteButtons();
-renderAll();
+solicitarEstado();
+crearBotonesVoto();
+renderizarTodo();
 
-// Intentar reproducir música suave tras interacción
-document.addEventListener('click', ()=> {
-  try{ audioSoft.play().catch(()=>{}); }catch(e){}
-}, {once:true});
+// Reproducir música suave cuando haya interacción
+document.addEventListener('click', () => {
+  try { audioSoft.play().catch(()=>{}); } catch(e){}
+}, { once: true });

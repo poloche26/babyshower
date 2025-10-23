@@ -1,107 +1,110 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Baby Shower Reveal 💖💙</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <title>Revelación del Bebé</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <!-- Bienvenida -->
-  <section id="welcome-overlay" class="overlay active">
-    <div class="welcome-box">
-      <h1>🎀 ¡Bienvenida familia! 🎀</h1>
-      <p>Hoy celebramos juntos la llegada de un nuevo miembro a nuestra familia 💕</p>
-      <input id="name-input" type="text" placeholder="Escribe tu nombre para participar" />
-      <button id="start-presentation-btn">Comenzar 🎉</button>
+  <!-- BIENVENIDA -->
+  <div id="welcome-overlay" class="overlay">
+    <div class="welcome-content">
+      <h1>👶 ¡Bienvenidos familia! 👶</h1>
+      <p>
+        Hoy celebramos juntos la llegada de un nuevo miembro a nuestra familia.<br>
+        Un regalo de amor que llenará nuestras vidas de sonrisas y felicidad 💖
+      </p>
+      <input id="name-input" type="text" placeholder="Escribe tu nombre..." />
+      <button id="start-presentation-btn">Iniciar presentación</button>
     </div>
-  </section>
+  </div>
 
-  <!-- Presentación inicial -->
-  <section id="presentation-overlay" class="overlay hidden">
-    <div class="presentation">
+  <!-- PRESENTACIÓN -->
+  <div id="presentation-overlay" class="overlay hidden">
+    <div class="slideshow">
       <div class="slide active">
-        <img src="img/foto1.jpeg" alt="Foto 1" />
-        <p>Desde el primer momento que supimos que venías en camino... 💫</p>
+        <img src="img/foto1.jpg" alt="Momento especial" />
+        <p>"Cada latido es un recordatorio de cuánto amor nos espera 💕"</p>
       </div>
       <div class="slide">
-        <img src="img/slide2.jpg" alt="Foto 2" />
-        <p>Has llenado nuestras vidas de amor y esperanza 🌸</p>
+        <img src="img/foto2.jpg" alt="Ecografía" />
+        <p>"La vida nos sorprende con milagros que caben en un corazón tan pequeño ✨"</p>
       </div>
       <div class="slide">
-        <img src="img/slide3.jpg" alt="Foto 3" />
-        <p>Y hoy, toda la familia se une para celebrar tu llegada 🍼</p>
+        <img src="img/foto3.jpg" alt="Familia" />
+        <p>"La familia crece, y con ella el amor infinito 💖"</p>
       </div>
-      <div class="controls">
-        <button id="prev-slide-btn">⬅️ Anterior</button>
-        <button id="next-slide-btn">Siguiente ➡️</button>
+      <div class="slide">
+        <img src="img/foto4.jpg" alt="Barriguita" />
+        <p>"Pronto en nuestros brazos, hoy ya en nuestro corazón 💞"</p>
       </div>
     </div>
-  </section>
+    <button id="next-slide-btn">➡️ Siguiente</button>
+  </div>
 
-  <!-- Aplicación principal -->
+  <!-- AUDIO -->
+  <audio id="audio-welcome" src="music/welcome.mp3"></audio>
+  <audio id="audio-soft" src="music/soft.mp3" loop></audio>
+  <audio id="audio-celebration" src="music/celebration.mp3"></audio>
+
+  <!-- APP PRINCIPAL -->
   <main id="app" class="hidden">
-    <h2>🎊 ¡Hora de adivinar el sexo del bebé! 🎊</h2>
-    <div id="votes"></div>
-
-    <div id="vote-results">
-      <p><strong>Participantes:</strong> <span id="presence-count">0</span></p>
-      <p>💙 Niño: <span id="count-boy">0</span> | 💖 Niña: <span id="count-girl">0</span></p>
+    <div class="card">
+      <h2>💖 Vota por el sexo del bebé 💙</h2>
+      <div id="votes"></div>
+      <p class="presence">👥 Participantes: <span id="presence-count">0</span></p>
     </div>
 
-    <div id="vote-history"></div>
-
-    <section id="chat">
-      <h3>💬 Chat familiar</h3>
+    <div class="card">
+      <h2>💬 Chat familiar</h2>
       <div id="messages"></div>
       <input id="chat-input" placeholder="Escribe un mensaje..." />
       <button id="send-btn">Enviar</button>
-    </section>
+    </div>
 
-    <div id="reactions">
-      <h3>Reacciones 😍</h3>
-      <div class="reaction-option">❤️</div>
-      <div class="reaction-option">🎉</div>
-      <div class="reaction-option">😂</div>
-      <div class="reaction-option">👏</div>
+    <div class="card">
+      <h2>🎉 Reacciones</h2>
+      <div id="reactions">
+        <button class="reaction-option">💖</button>
+        <button class="reaction-option">💙</button>
+        <button class="reaction-option">😂</button>
+        <button class="reaction-option">😍</button>
+        <button class="reaction-option">👏</button>
+      </div>
       <div id="reaction-counts"></div>
     </div>
 
-    <!-- Controles de anfitrión -->
-    <div class="host-panel">
-      <button id="host-btn">🔑 Iniciar como anfitrión</button>
+    <div class="card panel">
+      <h2>🗳️ Historial de Votaciones</h2>
+      <div id="vote-history"></div>
+    </div>
+
+    <div class="card host">
+      <h2>⚙️ Anfitrión</h2>
+      <button id="host-btn">Soy anfitrión</button>
       <div id="host-controls" class="hidden">
         <p id="chosen-sex">Sexo no fijado</p>
         <button id="set-boy">💙 Fijar Niño</button>
         <button id="set-girl">💖 Fijar Niña</button>
-        <button id="reveal-btn">🎊 Iniciar revelación</button>
-        <button id="reset-btn">🔁 Reiniciar</button>
+        <button id="reveal-btn">🎊 Revelar</button>
+        <button id="reset-btn">🔄 Reiniciar</button>
       </div>
     </div>
   </main>
 
-  <!-- Cuenta regresiva -->
-  <section id="final-countdown" class="overlay hidden">
-    <h1 id="countdown-number">10</h1>
-  </section>
+  <!-- Conteo regresivo -->
+  <div id="final-countdown" class="overlay hidden">
+    <div id="countdown-number">10</div>
+  </div>
 
-  <!-- Pantalla de revelación -->
-  <section id="reveal-overlay" class="overlay hidden">
+  <!-- Revelación final -->
+  <div id="reveal-overlay" class="overlay hidden">
+    <h1 id="reveal-title">¡Es un...!</h1>
+    <h2 id="reveal-sub"></h2>
     <canvas id="confetti-canvas"></canvas>
     <div id="balloons-layer"></div>
-    <div class="reveal-text">
-      <h1 id="reveal-title"></h1>
-      <p id="reveal-sub"></p>
-    </div>
-  </section>
+  </div>
 
-  <!-- Audios -->
-  <audio id="audio-welcome" src="music/welcome.mp3" preload="auto"></audio>
-  <audio id="audio-soft" src="music/soft.mp3" preload="auto" loop></audio>
-  <audio id="audio-celebration" src="music/celebration.mp3" preload="auto"></audio>
-
-  <!-- Script -->
   <script src="script.js"></script>
 </body>
 </html>
