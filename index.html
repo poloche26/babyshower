@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Revelación del Bebé</title>
+  <title>Revelación del Bebé 💖</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -105,6 +105,31 @@
     <div id="balloons-layer"></div>
   </div>
 
-  <script src="script.js"></script>
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBWTg5yjVKhVBAJLQlrFy1f5YDC_Ex8UVM",
+      authDomain: "babyshower-fa9e6.firebaseapp.com",
+      databaseURL: "https://babyshower-fa9e6-default-rtdb.firebaseio.com/",
+      projectId: "babyshower-fa9e6",
+      storageBucket: "babyshower-fa9e6.appspot.com",
+      messagingSenderId: "851629928131",
+      appId: "1:851629928131:web:1baeb3edb1093faaa73c76"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window.firebaseDB = db;
+    window.firebaseRefs = { ref, push, set, onValue, remove, update };
+  </script>
+
+  <!-- Script principal -->
+<!-- Firebase y tu script principal -->
+<script type="module" src="script.js"></script>
+
 </body>
 </html>

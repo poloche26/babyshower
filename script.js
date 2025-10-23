@@ -1,399 +1,270 @@
-/* ==========================================================
-  🍼 Baby Shower Reveal Script - Versión completa
-  ----------------------------------------------------------
-  - Sincronización entre pestañas (BroadcastChannel + localStorage)
-  - Sesiones: presentación → votaciones + interacción
-  - Guarda nombre de usuario y evita votos duplicados
-  - Chat y reacciones visibles en tiempo real
-  - El anfitrión puede fijar el sexo, iniciar el conteo y revelar
-  - Animaciones de confetti y globos al final
-=========================================================== */
+// Espera a que Firebase esté listo
+window.addEventListener("load", () => {
+  const db = window.firebaseDB;
+  const { ref, push, set, onValue, remove, update } = window.firebaseRefs;
 
-// --- Canal compartido entre pestañas para sincronizar datos ---
-const canal = new BroadcastChannel("babyshower_v1");
+  // 🔹 Referencias de la base de datos
+  const votesRef = ref(db, "votes");
+  const messagesRef = ref(db, "messages");
+  const reactionsRef = ref(db, "reactions");
+  const settingsRef = ref(db, "settings");
 
-// ID único del cliente (permite distinguir a cada participante)
-const clientId = localStorage.getItem("babyshower-clientId") || Math.random().toString(36).slice(2);
-localStorage.setItem("babyshower-clientId", clientId);
+  // 🔹 Elementos del DOM
+  const app = document.getElementById("app");
+  const welcomeOverlay = document.getElementById("welcome-overlay");
+  const presentationOverlay = document.getElementById("presentation-overlay");
+  const nextSlideBtn = document.getElementById("next-slide-btn");
+  const slides = document.querySelectorAll(".slide");
+  const nameInput = document.getElementById("name-input");
+  const startBtn = document.getElementById("start-presentation-btn");
 
-// Nombre del usuario
-let userName = localStorage.getItem("babyshower-name") || "";
+  const chatInput = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("send-btn");
+  const messagesDiv = document.getElementById("messages");
 
-// Estado global compartido (se guarda en localStorage)
-let state = JSON.parse(localStorage.getItem("babyshower-state") || "{}") || {
-  voters: {},         // clientId -> {name, choice}
-  messages: [],       // {id, name, text}
-  reactions: [],      // {id, name, emoji, ts}
-  chosenSex: null,    // "Niño" | "Niña"
-  revealed: false     // si ya se hizo la revelación
-};
+  const reactionsDiv = document.getElementById("reactions");
+  const reactionCountsDiv = document.getElementById("reaction-counts");
 
-// --- Elementos del DOM ---
-const el = (id)=>document.getElementById(id);
-const welcomeOverlay = el("welcome-overlay");
-const presOverlay = el("presentation-overlay");
-const startPresBtn = el("start-presentation-btn");
-const nameInput = el("name-input");
-const slides = document.querySelectorAll(".slide");
-let currentSlide = 0;
-const nextSlideBtn = el("next-slide-btn");
-const app = el("app");
-const votesDiv = el("votes");
-const presenceCount = el("presence-count");
-const voteHistoryEl = el("vote-history");
-const messagesEl = el("messages");
-const chatInput = el("chat-input");
-const sendBtn = el("send-btn");
-const reactionButtons = document.querySelectorAll(".reaction-option");
-const reactionCountsEl = el("reaction-counts");
-const hostBtn = el("host-btn");
-const hostControls = el("host-controls");
-const setBoyBtn = el("set-boy");
-const setGirlBtn = el("set-girl");
-const chosenSexEl = el("chosen-sex");
-const revealBtn = el("reveal-btn");
-const resetBtn = el("reset-btn");
-const finalCountdown = el("final-countdown");
-const countdownNumber = el("countdown-number");
-const revealOverlay = el("reveal-overlay");
-const revealTitle = el("reveal-title");
-const revealSub = el("reveal-sub");
-const confettiCanvas = el("confetti-canvas");
-const balloonsLayer = el("balloons-layer");
+  const votesDiv = document.getElementById("votes");
+  const voteHistoryDiv = document.getElementById("vote-history");
 
-// --- Audios ---
-const audioWelcome = el("audio-welcome");
-const audioSoft = el("audio-soft");
-const audioCelebration = el("audio-celebration");
+  const hostBtn = document.getElementById("host-btn");
+  const hostControls = document.getElementById("host-controls");
+  const revealBtn = document.getElementById("reveal-btn");
+  const resetBtn = document.getElementById("reset-btn");
+  const chosenSex = document.getElementById("chosen-sex");
 
-/* ==========================================================
-   🔄 FUNCIONES DE SINCRONIZACIÓN
-=========================================================== */
-function guardarYTransmitir() {
-  localStorage.setItem("babyshower-state", JSON.stringify(state));
-  canal.postMessage({ type: 'state', state });
-  renderizarTodo();
-}
+  const countdownOverlay = document.getElementById("final-countdown");
+  const countdownNumber = document.getElementById("countdown-number");
 
-// Escuchar actualizaciones desde otras pestañas
-canal.onmessage = (ev) => {
-  const msg = ev.data;
-  if (!msg) return;
-  if (msg.type === 'request_state') {
-    canal.postMessage({ type: 'state', state });
-  } else if (msg.type === 'state') {
-    state = msg.state || state;
-    localStorage.setItem("babyshower-state", JSON.stringify(state));
-    renderizarTodo();
-  }
-};
+  const revealOverlay = document.getElementById("reveal-overlay");
+  const revealTitle = document.getElementById("reveal-title");
+  const revealSub = document.getElementById("reveal-sub");
 
-// Pedir estado a las demás pestañas al abrir
-function solicitarEstado() {
-  canal.postMessage({ type: 'request_state', from: clientId });
-  const s = JSON.parse(localStorage.getItem("babyshower-state") || "{}");
-  if (s && Object.keys(s).length) {
-    state = s;
-    renderizarTodo();
-  }
-}
+  // 🔊 Audios
+  const audioWelcome = document.getElementById("audio-welcome");
+  const audioSoft = document.getElementById("audio-soft");
+  const audioCelebration = document.getElementById("audio-celebration");
 
-/* ==========================================================
-   🎬 SECCIÓN DE PRESENTACIÓN
-=========================================================== */
-function mostrarSlide(i) {
-  slides.forEach((el, idx) => el.classList.toggle('active', idx === i));
-  currentSlide = i;
-}
+  let currentSlide = 0;
+  let userName = "";
+  let isHost = false;
 
-nextSlideBtn?.addEventListener('click', () => {
-  currentSlide++;
-  if (currentSlide >= slides.length) {
-    presOverlay.classList.add('hidden');
-    app.classList.remove('hidden');
-    try { audioSoft.play(); } catch(e){}
-  } else mostrarSlide(currentSlide);
-});
+  // =========================
+  // 🎬 BIENVENIDA + PRESENTACIÓN
+  // =========================
+  startBtn.addEventListener("click", () => {
+    userName = nameInput.value.trim();
+    if (!userName) return alert("Por favor, escribe tu nombre ❤️");
 
-startPresBtn.addEventListener('click', () => {
-  const name = nameInput.value.trim();
-  if (!name && !userName) {
-    alert("Por favor escribe tu nombre antes de continuar");
-    return;
-  }
-  if (name) {
-    userName = name;
-    localStorage.setItem("babyshower-name", userName);
-  }
-  welcomeOverlay.classList.add('hidden');
-  presOverlay.classList.remove('hidden');
-  mostrarSlide(0);
-  try { audioWelcome.play(); } catch(e){}
-});
-
-/* ==========================================================
-   🗳️ SECCIÓN DE VOTACIONES
-=========================================================== */
-function crearBotonesVoto() {
-  votesDiv.innerHTML = '';
-  const opciones = ['Niño', 'Niña', '¡Sorpréndeme!'];
-  opciones.forEach(choice => {
-    const btn = document.createElement('button');
-    btn.className = 'vote-btn';
-    btn.dataset.choice = choice;
-    btn.textContent = (choice === 'Niño' ? '💙 Niño' :
-                      choice === 'Niña' ? '💖 Niña' : '🎁 ¡Sorpréndeme!');
-    btn.addEventListener('click', () => {
-      state.voters[clientId] = { name: userName || ('Invitado-' + clientId.slice(0,4)), choice, ts: Date.now() };
-      guardarYTransmitir();
-    });
-    votesDiv.appendChild(btn);
+    welcomeOverlay.classList.add("hidden");
+    presentationOverlay.classList.remove("hidden");
+    audioWelcome.play();
   });
-}
 
-/* ==========================================================
-   💬 CHAT EN VIVO
-=========================================================== */
-sendBtn.addEventListener('click', enviarMensaje);
-chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') enviarMensaje(); });
-
-function enviarMensaje() {
-  const texto = chatInput.value.trim();
-  if (!texto) return;
-  const nombre = userName || ('Invitado-' + clientId.slice(0,4));
-  const msg = { id: Math.random().toString(36).slice(2), name: nombre, text: texto, ts: Date.now() };
-  state.messages.push(msg);
-  chatInput.value = '';
-  guardarYTransmitir();
-  mostrarReaccionFlotante("💬");
-}
-
-/* ==========================================================
-   🎈 REACCIONES
-=========================================================== */
-reactionButtons.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const emoji = btn.textContent.trim();
-    const nombre = userName || ('Invitado-' + clientId.slice(0,4));
-    const r = { id: Date.now() + Math.random(), name: nombre, emoji, ts: Date.now() };
-    state.reactions.push(r);
-    guardarYTransmitir();
-    mostrarReaccionFlotante(emoji);
-  });
-});
-
-function mostrarReaccionFlotante(emoji) {
-  const node = document.createElement('div');
-  node.className = 'reaction-float';
-  node.textContent = emoji;
-  node.style.left = (10 + Math.random()*80) + '%';
-  node.style.position = 'fixed';
-  node.style.bottom = '0';
-  node.style.fontSize = '2rem';
-  node.style.animation = 'floatUp 3s ease forwards';
-  document.body.appendChild(node);
-  setTimeout(() => node.remove(), 3000);
-}
-
-/* ==========================================================
-   🧾 RENDERIZADO GENERAL
-=========================================================== */
-function renderizarMensajes() {
-  messagesEl.innerHTML = '';
-  state.messages.slice(-200).forEach(m => {
-    const d = document.createElement('div');
-    d.className = 'msg';
-    d.innerHTML = `<strong>${escaparHTML(m.name)}:</strong> ${escaparHTML(m.text)}`;
-    messagesEl.appendChild(d);
-  });
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function renderizarHistorialVotos() {
-  voteHistoryEl.innerHTML = '';
-  Object.values(state.voters).forEach(v => {
-    const d = document.createElement('div');
-    d.className = 'vote-entry';
-    d.textContent = `${v.name} → ${v.choice}`;
-    voteHistoryEl.appendChild(d);
-  });
-  const totales = { 'Niño': 0, 'Niña': 0 };
-  Object.values(state.voters).forEach(v => {
-    if (v.choice === 'Niño') totales['Niño']++;
-    else if (v.choice === 'Niña') totales['Niña']++;
-  });
-  presenceCount.textContent = Object.keys(state.voters).length.toString();
-}
-
-function renderizarReacciones() {
-  const mapa = {};
-  state.reactions.forEach(r => mapa[r.emoji] = (mapa[r.emoji] || 0) + 1);
-  reactionCountsEl.textContent = Object.entries(mapa).map(([k,v]) => `${k} ${v}`).join('  ');
-}
-
-function renderizarTodo() {
-  crearBotonesVoto();
-  renderizarMensajes();
-  renderizarHistorialVotos();
-  renderizarReacciones();
-
-  // Mostrar sexo fijado
-  if (state.chosenSex) chosenSexEl.textContent = `Sexo fijado: ${state.chosenSex}`;
-  else chosenSexEl.textContent = 'Sexo no fijado';
-
-  // Si ya se reveló en otra pestaña, mostrar la animación
-  if (state.revealed) {
-    mostrarRevelacionFinal(state.chosenSex);
-  }
-}
-
-function escaparHTML(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-/* ==========================================================
-   👑 ANFITRIÓN
-=========================================================== */
-hostBtn.addEventListener('click', () => {
-  const pass = prompt("Contraseña de anfitrión:");
-  if (pass === 'confetti') {
-    hostControls.classList.remove('hidden');
-    alert('✅ Controles de anfitrión activados.');
-  } else {
-    alert('❌ Contraseña incorrecta.');
-  }
-});
-
-setBoyBtn.addEventListener('click', () => {
-  state.chosenSex = 'Niño';
-  guardarYTransmitir();
-});
-setGirlBtn.addEventListener('click', () => {
-  state.chosenSex = 'Niña';
-  guardarYTransmitir();
-});
-
-revealBtn.addEventListener('click', () => {
-  if (!state.chosenSex) {
-    alert('Debes fijar el sexo antes de iniciar la revelación.');
-    return;
-  }
-  iniciarConteoFinal(state.chosenSex);
-  state.revealed = true;
-  guardarYTransmitir();
-});
-
-resetBtn.addEventListener('click', () => {
-  if (!confirm('¿Reiniciar todo el evento?')) return;
-  localStorage.removeItem('babyshower-state');
-  state = { voters:{}, messages:[], reactions:[], chosenSex:null, revealed:false };
-  guardarYTransmitir();
-});
-
-/* ==========================================================
-   ⏳ CONTEO Y REVELACIÓN FINAL
-=========================================================== */
-function iniciarConteoFinal(sexo) {
-  finalCountdown.classList.remove('hidden');
-  let count = 10;
-  countdownNumber.textContent = count;
-  try { audioSoft.pause(); audioWelcome.pause(); } catch(e){}
-  const intervalo = setInterval(() => {
-    count--;
-    countdownNumber.textContent = count;
-    if (count <= 0) {
-      clearInterval(intervalo);
-      finalCountdown.classList.add('hidden');
-      mostrarRevelacionFinal(sexo);
+  nextSlideBtn.addEventListener("click", () => {
+    slides[currentSlide].classList.remove("active");
+    currentSlide++;
+    if (currentSlide >= slides.length) {
+      presentationOverlay.classList.add("hidden");
+      app.classList.remove("hidden");
+      audioWelcome.pause();
+      audioSoft.play();
+      return;
     }
-  }, 1000);
-}
+    slides[currentSlide].classList.add("active");
+  });
 
-function mostrarRevelacionFinal(sexo) {
-  revealOverlay.classList.remove('hidden');
-  revealTitle.textContent = `¡Es un ${sexo}!`;
-  revealSub.textContent = (sexo === 'Niño') ? '💙 ¡Felicidades!' : '💖 ¡Felicidades!';
-  try {
-    audioSoft.pause();
-    audioCelebration.currentTime = 0;
-    audioCelebration.play();
-  } catch(e){}
-  lanzarConfetti(sexo);
-  lanzarGlobos(sexo);
-}
+  // =========================
+  // 🗳️ VOTACIONES
+  // =========================
+  votesDiv.innerHTML = `
+    <button id="vote-boy">💙 Niño</button>
+    <button id="vote-girl">💖 Niña</button>
+  `;
 
-/* ==========================================================
-   🎊 ANIMACIONES DE CELEBRACIÓN
-=========================================================== */
-function lanzarConfetti(sexo) {
-  if (!confettiCanvas) return;
-  const canvas = confettiCanvas;
-  const ctx = canvas.getContext('2d');
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
-  const colores = (sexo === 'Niño') ? ['#8FD3FF','#4FA3F7','#1E6ED8'] : ['#FFD0EA','#FF8FB4','#FF5BA3'];
-  const piezas = [];
-  for (let i=0; i<160; i++) {
-    piezas.push({
-      x: Math.random()*canvas.width,
-      y: Math.random()*-canvas.height,
-      vx: (Math.random()-0.5)*4,
-      vy: 2+Math.random()*4,
-      size: 6+Math.random()*8,
-      color: colores[Math.floor(Math.random()*colores.length)],
-      rot: Math.random()*360
-    });
+  const voteBoy = document.getElementById("vote-boy");
+  const voteGirl = document.getElementById("vote-girl");
+
+  voteBoy.onclick = () => vote("Niño");
+  voteGirl.onclick = () => vote("Niña");
+
+  function vote(sex) {
+    push(votesRef, { name: userName, sex });
   }
-  function frame() {
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    piezas.forEach(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.rot += 6*p.vx;
-      ctx.save();
-      ctx.translate(p.x,p.y);
-      ctx.rotate(p.rot*Math.PI/180);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size*0.6);
-      ctx.restore();
-      if (p.y > canvas.height+50) {
-        p.x = Math.random()*canvas.width;
-        p.y = -10;
+
+  onValue(votesRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    let html = "";
+    let countBoy = 0;
+    let countGirl = 0;
+
+    Object.values(data).forEach((v) => {
+      html += `<p>👤 ${v.name} votó por ${v.sex}</p>`;
+      if (v.sex === "Niño") countBoy++;
+      if (v.sex === "Niña") countGirl++;
+    });
+
+    voteHistoryDiv.innerHTML = html;
+    votesDiv.insertAdjacentHTML(
+      "beforeend",
+      `<p>💖 Niñas: ${countGirl} | 💙 Niños: ${countBoy}</p>`
+    );
+  });
+
+  // =========================
+  // 💬 CHAT
+  // =========================
+  sendBtn.addEventListener("click", () => {
+    const msg = chatInput.value.trim();
+    if (!msg) return;
+    push(messagesRef, { name: userName, msg });
+    chatInput.value = "";
+  });
+
+  onValue(messagesRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    messagesDiv.innerHTML = "";
+    Object.values(data).forEach((m) => {
+      messagesDiv.innerHTML += `<p><b>${m.name}:</b> ${m.msg}</p>`;
+    });
+  });
+
+  // =========================
+  // 🎉 REACCIONES
+  // =========================
+  reactionsDiv.addEventListener("click", (e) => {
+    if (e.target.classList.contains("reaction-option")) {
+      const emoji = e.target.textContent;
+      push(reactionsRef, { emoji });
+    }
+  });
+
+  onValue(reactionsRef, (snapshot) => {
+    const data = snapshot.val() || {};
+    reactionCountsDiv.innerHTML = Object.values(data)
+      .map((r) => r.emoji)
+      .join(" ");
+  });
+
+  // =========================
+  // 🧑‍💼 ANFITRIÓN (con contraseña)
+  // =========================
+  hostBtn.addEventListener("click", () => {
+    const password = prompt("🔒 Ingresa la contraseña del anfitrión:");
+    if (password === "confetti") {
+      isHost = true;
+      hostControls.classList.remove("hidden");
+      alert("🎉 Modo anfitrión activado");
+    } else {
+      alert("❌ Contraseña incorrecta");
+    }
+  });
+
+  document.getElementById("set-boy").onclick = () => {
+    if (isHost) update(settingsRef, { chosenSex: "Niño" });
+    else alert("Solo el anfitrión puede realizar esta acción.");
+  };
+
+  document.getElementById("set-girl").onclick = () => {
+    if (isHost) update(settingsRef, { chosenSex: "Niña" });
+    else alert("Solo el anfitrión puede realizar esta acción.");
+  };
+
+  revealBtn.addEventListener("click", async () => {
+    if (!isHost) return alert("Solo el anfitrión puede revelar el resultado.");
+    countdownOverlay.classList.remove("hidden");
+    let count = 10;
+    const timer = setInterval(() => {
+      countdownNumber.textContent = count;
+      count--;
+      if (count < 0) {
+        clearInterval(timer);
+        countdownOverlay.classList.add("hidden");
+        revealOverlay.classList.remove("hidden");
+        audioSoft.pause();
+        audioCelebration.play();
+
+        onValue(settingsRef, (snap) => {
+          const chosen = snap.val()?.chosenSex || "Niño";
+          revealTitle.textContent = `¡Es un ${chosen}! 🎉`;
+          startCelebration(chosenSex);
+          revealSub.textContent =
+            chosen === "Niña" ? "💖 Felicidades 💖" : "💙 Felicitaciones 💙";
+        });
       }
-    });
-    requestAnimationFrame(frame);
-  }
-  frame();
-}
+    }, 1000);
+  });
 
-function lanzarGlobos(sexo) {
-  const cont = balloonsLayer;
-  cont.innerHTML = '';
-  const color = (sexo === 'Niño') ? '#4fa3f7' : '#ff80c0';
-  for (let i=0; i<20; i++) {
-    const b = document.createElement('div');
-    b.className = 'balloon';
-    b.style.left = Math.random()*86 + '%';
-    b.style.background = color;
-    b.style.animationDuration = (5 + Math.random()*4) + 's';
-    cont.appendChild(b);
-    setTimeout(() => b.remove(), 8000);
-  }
-}
-
-/* ==========================================================
-   🚀 INICIALIZACIÓN
-=========================================================== */
-window.addEventListener('storage', () => {
-  const s = JSON.parse(localStorage.getItem("babyshower-state") || "{}");
-  if (s && Object.keys(s).length) { state = s; renderizarTodo(); }
+  resetBtn.addEventListener("click", () => {
+    if (!isHost) return alert("Solo el anfitrión puede reiniciar el evento.");
+    if (confirm("¿Seguro que deseas reiniciar todo?")) {
+      remove(votesRef);
+      remove(messagesRef);
+      remove(reactionsRef);
+      update(settingsRef, { chosenSex: null });
+      location.reload();
+    }
+  });
 });
+// 🎉 EFECTO DE CELEBRACIÓN AL REVELAR SEXO DEL BEBÉ
+function startCelebration(chosenSex) {
+  // 🌈 Fondo animado según el sexo
+  document.body.style.transition = "background 1s ease";
+  document.body.style.background =
+    chosenSex === "Niña"
+      ? "linear-gradient(180deg, #ffd0ea, #ff99c8, #fff)"
+      : "linear-gradient(180deg, #b3e5fc, #64b5f6, #fff)";
 
-solicitarEstado();
-crearBotonesVoto();
-renderizarTodo();
+  // 🎊 CONFETTI (colores adaptados)
+  for (let i = 0; i < 200; i++) {
+    const confetti = document.createElement("div");
+    confetti.classList.add("confetti");
+    confetti.style.left = Math.random() * 100 + "vw";
+    confetti.style.top = "-20px";
+    confetti.style.width = confetti.style.height =
+      8 + Math.random() * 8 + "px";
+    confetti.style.backgroundColor =
+      chosenSex === "Niña"
+        ? ["#ff69b4", "#ffc0cb", "#fff"][Math.floor(Math.random() * 3)]
+        : ["#1e90ff", "#87cefa", "#fff"][Math.floor(Math.random() * 3)];
+    confetti.style.animation = `confettiFall ${
+      3 + Math.random() * 3
+    }s linear forwards`;
+    document.body.appendChild(confetti);
+    setTimeout(() => confetti.remove(), 6000);
+  }
 
-// Reproducir música suave cuando haya interacción
-document.addEventListener('click', () => {
-  try { audioSoft.play().catch(()=>{}); } catch(e){}
-}, { once: true });
+  // 🎈 GLOBOS PERSONALIZADOS (rosas o celestes)
+  for (let i = 0; i < 30; i++) {
+    const balloon = document.createElement("div");
+    balloon.classList.add("balloon");
+    balloon.style.left = Math.random() * 100 + "vw";
+    balloon.style.fontSize = 2 + Math.random() * 2 + "rem";
+    balloon.textContent =
+      chosenSex === "Niña"
+        ? ["🎀", "🎈", "💖"][Math.floor(Math.random() * 3)]
+        : ["💙", "🎈", "🍼"][Math.floor(Math.random() * 3)];
+    balloon.style.animation = `floatBalloon ${
+      5 + Math.random() * 5
+    }s linear forwards`;
+    document.body.appendChild(balloon);
+    setTimeout(() => balloon.remove(), 7000);
+  }
+
+  // 💥 FUEGOS ARTIFICIALES
+  for (let i = 0; i < 10; i++) {
+    const firework = document.createElement("div");
+    firework.classList.add("firework");
+    firework.style.left = Math.random() * 100 + "vw";
+    firework.style.top = Math.random() * 70 + "vh";
+    firework.style.background =
+      chosenSex === "Niña"
+        ? ["#ff66b2", "#ff1493", "#ffb6c1"][Math.floor(Math.random() * 3)]
+        : ["#1e90ff", "#00bfff", "#87cefa"][Math.floor(Math.random() * 3)];
+    document.body.appendChild(firework);
+    setTimeout(() => firework.remove(), 1500);
+  }
+}
+
+
